@@ -54,10 +54,12 @@ __device__ Matrix GetSubMatrix(Matrix A, int row, int col)
 
 __global__ void MatMulKernel(const Matrix A, const Matrix B, Matrix C)
 {
+	//指名线程所在grid中的位置
 	int blockRow = blockIdx.y;
 	int blockCol = blockIdx.x;
 	Matrix Csub = GetSubMatrix(C, blockRow, blockCol);
 	double Cvalue = 0;
+	//指明线程所在block中的位置
 	int row = threadIdx.y;
 	int col = threadIdx.x;
 	for (int m = 0; m < (A.width / BLOCK_SIZE); ++m)
@@ -66,10 +68,12 @@ __global__ void MatMulKernel(const Matrix A, const Matrix B, Matrix C)
 		printf("blockCol %d\n", blockCol);		
 		Matrix Asub = GetSubMatrix(A, blockRow, m);
 		Matrix Bsub = GetSubMatrix(B, m, blockCol);
+		//共享内存空间
 		__shared__ double As[BLOCK_SIZE][BLOCK_SIZE];
 		__shared__ double Bs[BLOCK_SIZE][BLOCK_SIZE];
 		As[row][col] = GetElement(Asub, row, col);
 		Bs[row][col] = GetElement(Bsub, row, col);
+		//线程同步
 		__syncthreads();
 		for (int e = 0; e < BLOCK_SIZE; ++e)
 		{
@@ -127,14 +131,18 @@ int main(int argc, char **argv)
 	printf("   ------------------------------------------------------------------------------------\n");
 	hipEvent_t gpustart, gpustop;
 	float elapsedTime = 0.0;
+	//创建事件
 	hipEventCreate(&gpustart);
 	hipEventCreate(&gpustop);
+	//开始记录事件
 	hipEventRecord(gpustart, 0);
 	hipLaunchKernelGGL(MatMulKernel, dim3(dimGrid), dim3(dimBlock), 0, 0, d_A, d_B, d_C);
 	hipDeviceSynchronize();
+	//获取事件运行时间
 	hipEventRecord(gpustop, 0);
 	hipEventSynchronize(gpustop);
 	hipEventElapsedTime(&elapsedTime, gpustart, gpustop);
+	
 	hipMemcpy(C.elements, d_C.elements, sizeof(int) * size_C, hipMemcpyDeviceToHost);
 	hipDeviceSynchronize();
 	printf("   Matrix_deviceRef: (%d×%d)  <(%d,%d),(%d,%d)>  GPU运行时间为：%f s\n",
